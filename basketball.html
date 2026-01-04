@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stadium Half-Court Pro</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #000; }
+        
+        /* Cursor Toggle Logic */
+        body { cursor: default; }
+        body.game-active { cursor: none; }
+        #crosshair { 
+            display: none; position: absolute; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%); color: rgba(255,255,255,0.6); 
+            font-size: 40px; pointer-events: none; 
+        }
+        body.game-active #crosshair { display: block; }
+
+        #instructions { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            color: white; text-align: center; background: rgba(0,0,0,0.85); 
+            padding: 40px; border: 4px solid #f39c12; cursor: pointer; z-index: 10; 
+        }
+        
+        #hud { 
+            position: absolute; top: 20px; width: 100%; display: flex; 
+            justify-content: space-around; color: white; font-size: 24px; pointer-events: none; 
+        }
+        
+        #position-menu { 
+            position: absolute; top: 20px; left: 20px; display: flex; 
+            flex-direction: column; gap: 10px; z-index: 1000; 
+        }
+        #position-menu button { 
+            background: rgba(243, 156, 18, 0.8); border: 2px solid white; 
+            color: white; padding: 10px; font-weight: bold; cursor: pointer; 
+            transition: 0.2s; text-transform: uppercase; 
+        }
+        #position-menu button:hover { background: #e67e22; transform: scale(1.05); }
+
+        #celebration { 
+            position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%) scale(0); 
+            color: #f39c12; font-size: 80px; font-weight: 900; text-shadow: 4px 4px 0px #000; 
+            pointer-events: none; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            text-transform: uppercase; text-align: center; 
+        }
+        #celebration.show { transform: translate(-50%, -50%) scale(1.2); }
+        #combo-text { font-size: 30px; display: block; color: #fff; }
+        
+        #power-container { 
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); 
+            width: 300px; text-align: center; 
+        }
+        #power-bar { width: 100%; height: 15px; background: #333; border: 2px solid white; margin-top: 10px; }
+        #power-fill { width: 0%; height: 100%; background: #00ff00; transition: width 0.1s; }
+    </style>
+</head>
+<body>
+    <div id="crosshair">+</div>
+    <div id="celebration">SWISH!</div>
+    <div id="instructions">
+        <h1 style="color: #f39c12;">PRO GYM: STADIUM</h1>
+        <p>CLICK TO ENTER COURT</p>
+        <p style="font-size: 0.8em;">ESC TO SWITCH POSITIONS</p>
+    </div>
+    
+    <div id="hud">
+        <div>SCORE: <span id="score">0</span></div>
+        <div style="color: #f39c12;">TRAINING MODE</div>
+    </div>
+
+    <div id="position-menu">
+        <button onclick="changePosition('half')">Half Court</button>
+        <button onclick="changePosition('top')">Top of Key</button>
+        <button onclick="changePosition('side')">Right Wing</button>
+        <button onclick="changePosition('corner')">Left Corner</button>
+    </div>
+
+    <div id="power-container">
+        <div style="color: white; font-weight: bold;">SHOT METER</div>
+        <div id="power-bar"><div id="power-fill"></div></div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/",
+                "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+        import * as CANNON from 'cannon-es';
+
+        let scene, camera, renderer, world, controls, ballBody, ballMesh, hands, arcPoints, arcGeometry, arcPositions, trajectoryLine, hoopGroup;
+        let isCharging = false, charge = 0, score = 0, isHeld = true, canScore = true, combo = 0;
+        let crowdMembers = [];
+        
+        const powerFill = document.getElementById('power-fill');
+        const scoreDisp = document.getElementById('score');
+
+        init();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050505);
+            scene.fog = new THREE.Fog(0x050505, 10, 50);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.8, 9); 
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio); // Added for sharpness
+            // Listen for window resize events
+            window.addEventListener('resize', onWindowResize, false);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            world = new CANNON.World({ gravity: new CANNON.Vec3(0, -18, 0) });
+
+            setupLights();
+            createCourt();
+            createHoop();
+            addStadiumSurroundings(); // Function now defined below
+            createBall();
+            createPlayer();
+
+            controls = new PointerLockControls(camera, document.body);
+            document.getElementById('instructions').addEventListener('click', () => controls.lock());
+            
+            controls.addEventListener('lock', () => {
+                document.body.classList.add('game-active');
+                document.getElementById('instructions').style.display = 'none';
+            });
+            controls.addEventListener('unlock', () => {
+                document.body.classList.remove('game-active');
+                document.getElementById('instructions').style.display = '';
+            });
+
+            document.addEventListener('mousedown', () => { if(controls.isLocked && isHeld) isCharging = true; });
+            document.addEventListener('mouseup', () => { if(isCharging) shoot(); });
+            
+            // Visual Arc Setup
+            arcPoints = 20;
+            arcGeometry = new THREE.BufferGeometry();
+            arcPositions = new Float32Array(arcPoints * 3);
+            arcGeometry.setAttribute('position', new THREE.BufferAttribute(arcPositions, 3));
+            const arcMaterial = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.2, gapSize: 0.1 });
+            trajectoryLine = new THREE.Line(arcGeometry, arcMaterial);
+            trajectoryLine.computeLineDistances();
+            scene.add(trajectoryLine);
+
+            animate();
+        }
+
+        function createCourt() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#d39e5e'; ctx.fillRect(0, 0, 1024, 1024);
+            ctx.strokeStyle = 'white'; ctx.lineWidth = 8;
+            ctx.strokeRect(312, 512, 400, 512); 
+            ctx.beginPath(); ctx.arc(512, 512, 120, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(512, 1000, 700, Math.PI, 0); ctx.stroke();
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const courtGeo = new THREE.PlaneGeometry(20, 20);
+            const courtMat = new THREE.MeshStandardMaterial({ map: texture });
+            const courtMesh = new THREE.Mesh(courtGeo, courtMat);
+            courtMesh.rotation.x = -Math.PI / 2;
+            courtMesh.receiveShadow = true;
+            scene.add(courtMesh);
+
+            const floorBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+            floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+            world.addBody(floorBody);
+        }
+
+        function addStadiumSurroundings() {
+            const wallConfigs = [
+                { x: 0, z: -10, rotY: 0 },         
+                { x: -12, z: 0, rotY: Math.PI/2 }, 
+                { x: 12, z: 0, rotY: -Math.PI/2 }  
+            ];
+
+            wallConfigs.forEach(config => {
+                const wallGroup = new THREE.Group();
+                const wallGeo = new THREE.BoxGeometry(25, 10, 1);
+                const wallMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+                const wall = new THREE.Mesh(wallGeo, wallMat);
+                wallGroup.add(wall);
+
+                for(let i=0; i<80; i++) {
+                    const fan = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.15, 0.15, 0.5),
+                        new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff })
+                    );
+                    fan.position.set((Math.random()-0.5)*22, (Math.random()*6)-2, 0.6);
+                    fan.userData.bobOffset = Math.random() * 10;
+                    wallGroup.add(fan);
+                    crowdMembers.push(fan);
+                }
+                wallGroup.position.set(config.x, 5, config.z);
+                wallGroup.rotation.y = config.rotY;
+                scene.add(wallGroup);
+            });
+        }
+
+        function createHoop() {
+            // Group for hoop visuals so we can move them together
+            hoopGroup = new THREE.Group();
+
+            // 1. THE POLE (The missing piece)
+            const poleGeo = new THREE.CylinderGeometry(0.15, 0.15, 6, 12);
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            const poleMesh = new THREE.Mesh(poleGeo, poleMat);
+            
+            // Positioned behind the backboard and reaching the ground
+            poleMesh.position.set(0, 3, -4.2); 
+            poleMesh.castShadow = true;
+            hoopGroup.add(poleMesh);
+
+            // Add Physics for the Pole
+            const poleBody = new CANNON.Body({ mass: 0 });
+            poleBody.addShape(new CANNON.Cylinder(0.15, 0.15, 6, 12));
+            poleBody.position.set(0, 3, -4.2);
+            world.addBody(poleBody);
+
+            // 2. THE RIM
+            const rim = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.05, 12, 30), new THREE.MeshStandardMaterial({color: 0xff4400}));
+            rim.position.set(0, 3.5, -3.5);
+            rim.rotation.x = Math.PI/2;
+            hoopGroup.add(rim);
+
+            // 3. THE BACKBOARD
+            const board = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.8, 0.1), new THREE.MeshStandardMaterial({color: 0xeeeeee}));
+            board.position.set(0, 4.2, -4);
+            hoopGroup.add(board);
+
+            // 4. THE NET
+            const netGeo = new THREE.CylinderGeometry(0.4, 0.25, 0.8, 16, 1, true);
+            const netMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff, wireframe: true, transparent: true, opacity: 0.4, side: THREE.DoubleSide
+            });
+            const netMesh = new THREE.Mesh(netGeo, netMat);
+            netMesh.position.set(0, 3.1, -3.5);
+            hoopGroup.add(netMesh);
+
+            // Create a Jumbotron above the backboard
+            const jumbotronCanvas = document.createElement('canvas');
+            jumbotronCanvas.width = 256; jumbotronCanvas.height = 128;
+            const jumbCtx = jumbotronCanvas.getContext('2d');
+
+            const jumbTexture = new THREE.CanvasTexture(jumbotronCanvas);
+            const jumbMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 1.5, 0.2),
+                new THREE.MeshStandardMaterial({ map: jumbTexture, emissive: 0x333333 })
+            );
+            jumbMesh.position.set(0, 6, -4.1);
+            hoopGroup.add(jumbMesh);
+
+            // Update function to be called whenever score changes
+            window.updateJumbotron = function() {
+                jumbCtx.fillStyle = '#111'; jumbCtx.fillRect(0, 0, 256, 128);
+                jumbCtx.fillStyle = '#f39c12'; jumbCtx.font = 'bold 40px Arial';
+                jumbCtx.fillText('HOME', 20, 50);
+                jumbCtx.fillStyle = '#fff'; jumbCtx.font = 'bold 60px Courier';
+                jumbCtx.fillText(score.toString().padStart(2, '0'), 150, 80);
+                jumbTexture.needsUpdate = true;
+            };
+            updateJumbotron(); // Initial draw
+
+            // Add grouped hoop visuals to the scene. Physics bodies (CANNON) are kept separate.
+            scene.add(hoopGroup);
+
+            // Physics backboard collision
+            const bbBody = new CANNON.Body({ mass: 0 });
+            bbBody.addShape(new CANNON.Box(new CANNON.Vec3(1.25, 0.9, 0.05)), new CANNON.Vec3(0, 4.2, -4));
+            world.addBody(bbBody);
+
+            // Setup Goal Detection Sensor
+            setupGoalDetection();
+        }
+
+        function setupGoalDetection() {
+            const celebrationUI = document.getElementById('celebration');
+            const sensorBody = new CANNON.Body({ isTrigger: true, shape: new CANNON.Sphere(0.3) });
+            sensorBody.position.set(0, 3.5, -3.5);
+            world.addBody(sensorBody);
+
+            sensorBody.addEventListener('collide', (e) => {
+                if(canScore && !isHeld) {
+                    score++; combo++;
+                    scoreDisp.innerText = score;
+                    canScore = false;
+                    let msg = 'SWISH!';
+                    if(combo === 2) msg = 'DOUBLE!';
+                    if(combo >= 3) msg = 'ON FIRE!!';
+                    celebrationUI.innerHTML = `${msg} <span id="combo-text">${combo}X COMBO</span>`;
+                    celebrationUI.classList.add('show');
+                    setTimeout(() => celebrationUI.classList.remove('show'), 1500);
+                }
+            });
+        }
+
+        function createPlayer() {
+            hands = new THREE.Group();
+            const h = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.2), new THREE.MeshStandardMaterial({color: 0xffdbac}));
+            h.position.set(0.4, -0.4, -0.6);
+            hands.add(h);
+            camera.add(hands);
+            scene.add(camera);
+        }
+
+        window.changePosition = function(pos) {
+            const positions = {
+                'half': { x: 0, z: 12 }, 'top': { x: 0, z: 7 }, 
+                'side': { x: 7, z: 8 }, 'corner': { x: -8, z: 3 } 
+            };
+            const target = positions[pos];
+            if (target) {
+                camera.position.set(target.x, 1.8, target.z);
+                camera.lookAt(0, 3.5, -3.5);
+                resetBall();
+                controls.lock();
+            }
+        }
+
+        function createBall() {
+            ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshStandardMaterial({color: 0xe67e22}));
+            scene.add(ballMesh);
+            ballBody = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(0.2) });
+            ballBody.sleep();
+            world.addBody(ballBody);
+        }
+
+        function resetBall() {
+            isHeld = true; hands.visible = true;
+            ballBody.velocity.set(0,0,0);
+            ballBody.angularVelocity.set(0,0,0);
+            ballBody.sleep();
+        }
+
+        function setupLights() {
+            const spot = new THREE.SpotLight(0xffffff, 60, 50, 0.5);
+            spot.position.set(0, 15, 5);
+            spot.castShadow = true;
+            scene.add(spot, new THREE.AmbientLight(0xffffff, 0.4));
+        }
+
+        function shoot() {
+            isHeld = false; isCharging = false; canScore = true;
+            hands.visible = false;
+            ballBody.wakeUp();
+            ballBody.position.copy(ballMesh.position);
+            const lookDir = new THREE.Vector3();
+            camera.getWorldDirection(lookDir);
+            const strength = 10 + (charge * 16); 
+            ballBody.velocity.set(lookDir.x * strength, (lookDir.y + 0.35) * strength, lookDir.z * strength);
+            charge = 0; powerFill.style.width = '0%';
+            setTimeout(resetBall, 3000);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            world.step(1/60);
+            const time = Date.now() * 0.005;
+
+            crowdMembers.forEach(fan => {
+                fan.position.y += Math.sin(time + fan.userData.bobOffset) * 0.005;
+            });
+
+            // Only move the hoop if the score is above 5
+            if (score > 5 && typeof hoopGroup !== 'undefined') {
+                const moveSpeed = 0.002;
+                const moveRange = 3;
+                const xOffset = Math.sin(Date.now() * moveSpeed) * moveRange;
+                hoopGroup.position.x = xOffset;
+                // Note: to move physics colliders with the visuals, group the cannon bodies
+                // into a compound and sync their positions with `hoopGroup` here.
+            }
+
+            if(isHeld) {
+                const holdPos = new THREE.Vector3(0.3, -0.4, -0.7);
+                camera.localToWorld(holdPos);
+                ballMesh.position.copy(holdPos);
+                ballMesh.quaternion.copy(camera.quaternion);
+                ballMesh.scale.set(0.6, 0.6, 0.6); 
+                if(isCharging && charge < 1) {
+                    charge += 0.02;
+                    powerFill.style.width = (charge * 100) + '%';
+                }
+                // Trajectory preview while holding charge
+                if (typeof trajectoryLine !== 'undefined') {
+                    trajectoryLine.visible = isCharging;
+                    if (isCharging) {
+                        const lookDir = new THREE.Vector3();
+                        camera.getWorldDirection(lookDir);
+                        const v0 = 10 + (charge * 16);
+                        const gravity = 18;
+
+                        for (let i = 0; i < arcPoints; i++) {
+                            const t = i * 0.1;
+                            const x = ballMesh.position.x + (lookDir.x * v0) * t;
+                            const y = ballMesh.position.y + ((lookDir.y + 0.35) * v0) * t - 0.5 * gravity * t * t;
+                            const z = ballMesh.position.z + (lookDir.z * v0) * t;
+                            arcPositions[i * 3] = x;
+                            arcPositions[i * 3 + 1] = y;
+                            arcPositions[i * 3 + 2] = z;
+                        }
+                        arcGeometry.attributes.position.needsUpdate = true;
+                        trajectoryLine.computeLineDistances();
+                    }
+                }
+            } else {
+                ballMesh.scale.set(1, 1, 1);
+                ballMesh.position.copy(ballBody.position);
+                ballMesh.quaternion.copy(ballBody.quaternion);
+            }
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
