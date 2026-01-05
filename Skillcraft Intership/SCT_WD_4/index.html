@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Task Manager</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --primary: #38bdf8;
+            --accent: #f43f5e;
+            --text: #f8fafc;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+            margin: 0;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card);
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        h2 { margin-top: 0; text-align: center; color: var(--primary); }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        input {
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: white;
+            font-size: 1rem;
+        }
+
+        button#addBtn {
+            padding: 12px;
+            background: var(--primary);
+            border: none;
+            border-radius: 8px;
+            color: #0f172a;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button#addBtn:hover { opacity: 0.9; }
+
+        ul { list-style: none; padding: 0; }
+
+        .task-item {
+            background: #334155;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+
+        .task-item.completed { opacity: 0.6; }
+        .task-item.completed .task-text { text-decoration: line-through; }
+
+        .task-info { display: flex; flex-direction: column; flex-grow: 1; }
+        .task-date { font-size: 0.8rem; color: var(--primary); margin-top: 4px; }
+
+        .actions { display: flex; gap: 8px; }
+        .actions button {
+            border: none;
+            padding: 6px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .btn-done { background: #22c55e; color: white; }
+        .btn-edit { background: #eab308; color: white; }
+        .btn-del { background: var(--accent); color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Task Manager</h2>
+    
+    <div class="input-group">
+        <input type="text" id="taskInput" placeholder="Enter task name...">
+        <input type="datetime-local" id="dateInput">
+        <button id="addBtn">Add Task</button>
+    </div>
+
+    <ul id="taskList"></ul>
+</div>
+
+<script>
+    const taskInput = document.getElementById('taskInput');
+    const dateInput = document.getElementById('dateInput');
+    const addBtn = document.getElementById('addBtn');
+    const taskList = document.getElementById('taskList');
+
+    // Load tasks from LocalStorage on startup
+    let tasks = JSON.parse(localStorage.getItem('myTasks')) || [];
+
+    function saveAndRender() {
+        localStorage.setItem('myTasks', JSON.stringify(tasks));
+        render();
+    }
+
+    function addTask() {
+        const text = taskInput.value.trim();
+        const date = dateInput.value;
+        if (!text) return;
+
+        tasks.push({
+            id: Date.now(),
+            text: text,
+            date: date,
+            completed: false
+        });
+
+        taskInput.value = "";
+        dateInput.value = "";
+        saveAndRender();
+    }
+
+    function toggleTask(id) {
+        tasks = tasks.map(t => t.id === id ? {...t, completed: !t.completed} : t);
+        saveAndRender();
+    }
+
+    function deleteTask(id) {
+        tasks = tasks.filter(t => t.id !== id);
+        saveAndRender();
+    }
+
+    function editTask(id) {
+        const task = tasks.find(t => t.id === id);
+        const newText = prompt("Edit Task:", task.text);
+        if (newText !== null && newText.trim() !== "") {
+            task.text = newText;
+            saveAndRender();
+        }
+    }
+
+    function render() {
+        taskList.innerHTML = "";
+        tasks.forEach(task => {
+            const li = document.createElement('li');
+            li.className = `task-item ${task.completed ? 'completed' : ''}`;
+            
+            const formattedDate = task.date ? new Date(task.date).toLocaleString() : "No time set";
+
+            li.innerHTML = `
+                <div class="task-info">
+                    <span class="task-text">${task.text}</span>
+                    <span class="task-date">${formattedDate}</span>
+                </div>
+                <div class="actions">
+                    <button class="btn-done" onclick="toggleTask(${task.id})">✓</button>
+                    <button class="btn-edit" onclick="editTask(${task.id})">✎</button>
+                    <button class="btn-del" onclick="deleteTask(${task.id})">✕</button>
+                </div>
+            `;
+            taskList.appendChild(li);
+        });
+    }
+
+    addBtn.addEventListener('click', addTask);
+    
+    // Initial Render
+    render();
+</script>
+
+</body>
+</html>
