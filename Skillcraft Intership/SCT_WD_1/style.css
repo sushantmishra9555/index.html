@@ -1,0 +1,163 @@
+/* Basic Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    line-height: 1.6;
+}
+
+/* Navbar Initial State */
+#navbar {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 50px;
+    transition: all 0.4s ease; /* Smooth transition for color change */
+    z-index: 1000;
+    background-color: transparent; /* Transparent at the top */
+}
+
+/* Style when scrolled (added via JS) */
+#navbar.scrolled {
+    background-color: #2c3e50;
+    padding: 10px 50px; /* Becomes thinner */
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.logo {
+    color: white;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.nav-links {
+    display: flex;
+    list-style: none;
+}
+
+.nav-links li {
+    margin-left: 30px;
+}
+
+.nav-links a {
+    color: white;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s;
+}
+
+/* Hover Effect on Menu Items */
+.nav-links a:hover {
+    color: #f39c12; /* Changes to orange on hover */
+}
+
+/* Hero Section */
+.hero {
+    height: 100vh;
+    background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), 
+                url('https://images.unsplash.com/photo-1497215728101-856f4ea42174') no-repeat center center/cover;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    text-align: center;
+}
+
+/*----------------------------------------------------------*/
+
+
+
+
+/* Section Titles */
+.section-title {
+    text-align: center;
+    padding: 60px 0 20px;
+}
+
+/* Features Grid */
+.features {
+    padding: 50px 10%;
+    background-color: #f9f9f9;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 30px;
+    margin-top: 40px;
+}
+
+.feature-card {
+    background: white;
+    padding: 40px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    transition: transform 0.3s ease;
+}
+
+.feature-card:hover {
+    transform: translateY(-10px); /* Lifts up on hover */
+}
+
+.feature-card .icon {
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
+
+/* About Me Section (Flexbox) */
+.about-me {
+    padding: 100px 10%;
+}
+
+.about-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 50px;
+    flex-wrap: wrap; /* Makes it responsive */
+}
+
+.about-text { flex: 1; min-width: 300px; }
+.about-image img {
+    border-radius: 50%;
+    border: 5px solid #2c3e50;
+    max-width: 100%;
+}
+
+.btn-primary {
+    margin-top: 20px;
+    padding: 12px 25px;
+    background: #2c3e50;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+/* Footer */
+footer {
+    background: #2c3e50;
+    color: white;
+    text-align: center;
+    padding: 40px 0;
+}
+
+.social-links {
+    margin-top: 20px;
+}
+
+.social-links a {
+    color: #f39c12;
+    margin: 0 15px;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
